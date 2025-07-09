@@ -70,6 +70,12 @@ if uploaded_counseling and uploaded_diagnosis:
     st.markdown("서비스 이용 인원")
     st.dataframe(monthly_summary)
 
+    combined_ids = pd.concat([df_counseling[['아이디']], df_diagnosis[['아이디']]])
+    unique_ids = combined_ids['아이디'].drop_duplicates()
+    unique_ids = unique_ids[unique_ids.notnull() & (unique_ids != "")]
+    st.write("실제 인원(중복 제거):", unique_ids.tolist())
+    st.write("실제 인원 수:", len(unique_ids))
+
     st.markdown("서비스 이용 횟수")
     monthly_summary_count = pd.DataFrame()
     monthly_summary_count['월'] = sorted(set(df_counseling['상담월명'].dropna()) | set(df_diagnosis['진단월명'].dropna()))
