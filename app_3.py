@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("📊 보고서용 데이터 추출 앱")
+st.title("📊 보고서용 데이터 추출 프로그램")
 
 uploaded_counseling = st.file_uploader("상담 이력 엑셀 파일 업로드", type=["xlsx"], key="counseling")
 uploaded_diagnosis = st.file_uploader("진단 이력 엑셀 파일 업로드", type=["xlsx"], key="diagnosis")
