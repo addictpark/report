@@ -318,21 +318,23 @@ if uploaded_counseling and uploaded_diagnosis:
     st.dataframe(area_sum_df_with_total)
 
     main_issue_sum_df = (
-        count_df
-        .groupby(['영역','주호소1'])['상담건수'].sum()
-        .reset_index()
-        .sort_values('상담건수', ascending=False)
+    count_df
+    .groupby(['영역','주호소1'])['상담건수'].sum()
+    .reset_index()
+    .sort_values('상담건수', ascending=False)
     )
     main_issue_sum_df.columns = ['영역', '주호소1', '주호소1별 상담건수 합계']
+
+    # 합계 행 추가
     total_row = pd.DataFrame([{
-    '영역': '합계',
-    '주호소1': '',
-    '주호소1별 상담건수 합계': main_issue_sum_df['주호소1별 상담건수 합계'].sum()
+        '영역': '합계',
+        '주호소1': '',
+        '주호소1별 상담건수 합계': main_issue_sum_df['주호소1별 상담건수 합계'].sum()
     }])
     main_issue_sum_df_with_total = pd.concat([main_issue_sum_df, total_row], ignore_index=True)
 
     st.markdown("3) 주호소1별 상담건수 합계")
-    st.dataframe(main_issue_sum_df)
+    st.dataframe(main_issue_sum_df_with_total)
 
     missing_count = df_counseling['주호소1'].isnull().sum()
     if missing_count > 0:
