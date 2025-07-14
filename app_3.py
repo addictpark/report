@@ -29,6 +29,17 @@ if uploaded_counseling and uploaded_diagnosis:
         st.stop()
     df_diagnosis = pd.read_excel(uploaded_diagnosis)
 
+    # 날짜 변환 및 연월 처리
+    df_counseling['상담실시일'] = pd.to_datetime(df_counseling['상담실시일'], errors='coerce')
+    df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
+    df_counseling['상담연월'] = df_counseling['상담실시일'].dt.to_period('M').astype(str)
+    df_diagnosis['진단연월'] = df_diagnosis['진단실시일'].dt.to_period('M').astype(str)
+
+    # 연령대, 성별 등
+    df_counseling['연령대'] = (df_counseling['신청직원나이'] // 10 * 10).astype('Int64').astype(str) + '대'
+    df_counseling['성별'] = df_counseling['신청직원성별'].fillna('미상')
+
+    # 결측치 요약
     def missing_summary(df, name):
         summary = pd.DataFrame({
             '결측치 수': df.isnull().sum(),
@@ -52,22 +63,26 @@ if uploaded_counseling and uploaded_diagnosis:
         with st.expander("진단 이력 결측치"):
             missing_summary(df_diagnosis, "진단 이력")
 
-    df_counseling['상담실시일'] = pd.to_datetime(df_counseling['상담실시일'], errors='coerce')
-    df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
-    df_counseling['연령대'] = (df_counseling['신청직원나이'] // 10 * 10).astype('Int64').astype(str) + '대'
-    df_counseling['성별'] = df_counseling['신청직원성별'].fillna('미상')
-    df_counseling['상담월'] = df_counseling['상담실시일'].dt.to_period('M')
-    df_counseling['상담월명'] = df_counseling['상담실시일'].dt.strftime('%m월')
-    df_diagnosis['진단월'] = df_diagnosis['진단실시일'].dt.to_period('M')
-    df_diagnosis['진단월명'] = df_diagnosis['진단실시일'].dt.strftime('%m월')
+    # 연-월 기준 월 목록
+    valid_months_counseling = df_counseling['상담실시일'].dropna()
+    valid_months_diagnosis = df_diagnosis['진단실시일'].dropna()
+    all_valid_months = pd.concat([valid_months_counseling, valid_months_diagnosis])
 
+    if len(all_valid_months) > 0:
+        min_month = all_valid_months.min().to_period('M')
+        max_month = all_valid_months.max().to_period('M')
+    # 전체 월 목록 생성 (예: 2024-08, ..., 2025-06)
+        all_months = pd.period_range(min_month, max_month, freq='M').astype(str).tolist()
+    else:
+        all_months = []
+
+
+    # 운영 요약 - 인원수
     st.markdown("---")
     st.header("운영 요약")
-
-    all_months = sorted(set(df_counseling['상담월명'].dropna()) | set(df_diagnosis['진단월명'].dropna()))
-    summary = pd.DataFrame({'월': all_months})
-    summary['심리상담'] = summary['월'].apply(lambda m: df_counseling[df_counseling['상담월명']==m]['아이디'].nunique())
-    summary['심리진단'] = summary['월'].apply(lambda m: df_diagnosis[df_diagnosis['진단월명']==m]['아이디'].nunique())
+    summary = pd.DataFrame({'연월': all_months})
+    summary['심리상담'] = summary['연월'].apply(lambda m: df_counseling[df_counseling['상담연월']==m]['아이디'].nunique())
+    summary['심리진단'] = summary['연월'].apply(lambda m: df_diagnosis[df_diagnosis['진단연월']==m]['아이디'].nunique())
     summary['합계'] = summary['심리상담'] + summary['심리진단']
 
     total_counseling_ids = df_counseling['아이디'].nunique()
@@ -79,15 +94,17 @@ if uploaded_counseling and uploaded_diagnosis:
     st.subheader("서비스 이용 인원")
     st.dataframe(summary, use_container_width=True)
 
+    # 실제 인원(중복 제거)
     unique_ids = pd.concat([df_counseling[['아이디']], df_diagnosis[['아이디']]])['아이디'].drop_duplicates()
     unique_ids = unique_ids[unique_ids.notnull() & (unique_ids != "")]
     with st.expander("실제 인원(중복 제거) 목록"):
         st.write(unique_ids.tolist())
         st.write(f"실제 인원 수: {len(unique_ids)} 명")
 
-    summary_count = pd.DataFrame({'월': all_months})
-    summary_count['심리상담'] = summary_count['월'].apply(lambda m: len(df_counseling[df_counseling['상담월명']==m]))
-    summary_count['심리진단'] = summary_count['월'].apply(lambda m: len(df_diagnosis[df_diagnosis['진단월명']==m]))
+    # 이용 횟수 요약
+    summary_count = pd.DataFrame({'연월': all_months})
+    summary_count['심리상담'] = summary_count['연월'].apply(lambda m: len(df_counseling[df_counseling['상담연월']==m]))
+    summary_count['심리진단'] = summary_count['연월'].apply(lambda m: len(df_diagnosis[df_diagnosis['진단연월']==m]))
     summary_count['합계'] = summary_count['심리상담'] + summary_count['심리진단']
     summary_count.loc[len(summary_count)] = ['누계', summary_count['심리상담'].sum(), summary_count['심리진단'].sum(), summary_count['합계'].sum()]
     st.subheader("서비스 이용 횟수")
@@ -96,81 +113,84 @@ if uploaded_counseling and uploaded_diagnosis:
     st.markdown("---")
     st.header("상담 통계")
 
+    # 상담유형별 인원 및 횟수
     st.subheader("1) 상담유형별 인원 및 횟수")
-    type_people = df_counseling.groupby(['상담월명', '상담유형'])['아이디'].nunique().reset_index()
-    type_people_summary = type_people.pivot(index='상담월명', columns='상담유형', values='아이디').fillna(0).astype(int)
+    type_people = df_counseling.groupby(['상담연월', '상담유형'])['아이디'].nunique().reset_index()
+    type_people_summary = type_people.pivot(index='상담연월', columns='상담유형', values='아이디')
+    type_people_summary = type_people_summary.reindex(all_months).fillna(0).astype(int)
     type_people_summary['합계'] = type_people_summary.sum(axis=1)
     type_people_summary.loc['누계'] = type_people_summary.sum()
+
     real_type_people = df_counseling.groupby('상담유형')['아이디'].nunique()
-    실계_행_people = real_type_people.reindex(type_people_summary.columns[:-1]).fillna(0).astype(int)
-    실계_합계_people = pd.Series([real_type_people.sum()], index=['합계'])
-    type_people_summary.loc['실계'] = pd.concat([실계_행_people, 실계_합계_people])
+    실계_행 = real_type_people.reindex(type_people_summary.columns[:-1]).fillna(0).astype(int)
+    실계_합계 = pd.Series([real_type_people.sum()], index=['합계'])
+    type_people_summary.loc['실계'] = pd.concat([실계_행, 실계_합계])
+
     st.markdown("상담유형별 이용 인원")
     st.dataframe(type_people_summary)
 
-    type_counts = df_counseling.groupby(['상담월명', '상담유형'])['사례번호'].count().reset_index()
-    type_counts_summary = type_counts.pivot(index='상담월명', columns='상담유형', values='사례번호').fillna(0).astype(int)
+    type_counts = df_counseling.groupby(['상담연월', '상담유형'])['사례번호'].count().reset_index()
+    type_counts_summary = type_counts.pivot(index='상담연월', columns='상담유형', values='사례번호')
+    type_counts_summary = type_counts_summary.reindex(all_months).fillna(0).astype(int)
     type_counts_summary['합계'] = type_counts_summary.sum(axis=1)
     type_counts_summary.loc['누계'] = type_counts_summary.sum()
+
     st.markdown("상담유형별 이용 횟수")
     st.dataframe(type_counts_summary)
 
+    # 성별 이용 인원 및 횟수
     st.markdown("---")
     st.subheader("2) 성별 이용 인원 및 횟수")
-    gender_people = df_counseling.groupby(['상담월명', '성별'])['아이디'].nunique().reset_index()
-    gender_people_summary = gender_people.pivot(index='상담월명', columns='성별', values='아이디').fillna(0).astype(int)
+    gender_people = df_counseling.groupby(['상담연월', '성별'])['아이디'].nunique().reset_index()
+    gender_people_summary = gender_people.pivot(index='상담연월', columns='성별', values='아이디')
+    gender_people_summary = gender_people_summary.reindex(all_months).fillna(0).astype(int)
     gender_people_summary['합계'] = gender_people_summary.sum(axis=1)
     gender_people_summary.loc['누계'] = gender_people_summary.sum()
-    real_gender_people = df_counseling.groupby('성별')['아이디'].nunique()
-    실계_행_gender = real_gender_people.reindex(gender_people_summary.columns[:-1]).fillna(0).astype(int)
-    실계_합계_gender = pd.Series([real_gender_people.sum()], index=['합계'])
-    gender_people_summary.loc['실계'] = pd.concat([실계_행_gender, 실계_합계_gender])
     st.markdown("성별 이용 인원")
     st.dataframe(gender_people_summary)
 
-    gender_counts = df_counseling.groupby(['상담월명', '성별'])['사례번호'].count().reset_index()
-    gender_counts_summary = gender_counts.pivot(index='상담월명', columns='성별', values='사례번호').fillna(0).astype(int)
+    gender_counts = df_counseling.groupby(['상담연월', '성별'])['사례번호'].count().reset_index()
+    gender_counts_summary = gender_counts.pivot(index='상담연월', columns='성별', values='사례번호')
+    gender_counts_summary = gender_counts_summary.reindex(all_months).fillna(0).astype(int)
     gender_counts_summary['합계'] = gender_counts_summary.sum(axis=1)
     gender_counts_summary.loc['누계'] = gender_counts_summary.sum()
     st.markdown("성별 이용 횟수")
     st.dataframe(gender_counts_summary)
 
+    # 연령별 인원 및 횟수
     st.markdown("---")
     st.subheader("3) 연령별 인원 및 횟수")
-    age_monthly = df_counseling.groupby(['상담월', '연령대']).agg(
+    age_monthly = df_counseling.groupby(['상담연월', '연령대']).agg(
         인원수=('아이디', 'nunique'),
         건수=('사례번호', 'count')
     ).reset_index()
-    age_pivot_people = age_monthly.pivot(index='상담월', columns='연령대', values='인원수').fillna(0).astype(int)
+    age_pivot_people = age_monthly.pivot(index='상담연월', columns='연령대', values='인원수')
+    age_pivot_people = age_pivot_people.reindex(all_months).fillna(0).astype(int)
     age_pivot_people['합계'] = age_pivot_people.sum(axis=1)
-    age_pivot_cases = age_monthly.pivot(index='상담월', columns='연령대', values='건수').fillna(0).astype(int)
+
+    age_pivot_cases = age_monthly.pivot(index='상담연월', columns='연령대', values='건수')
+    age_pivot_cases = age_pivot_people.reindex(all_months).fillna(0).astype(int)
     age_pivot_cases['합계'] = age_pivot_cases.sum(axis=1)
+    age_pivot_cases = age_pivot_cases[age_pivot_cases.index != 'NaT']
     age_pivot_cases.loc['합계'] = age_pivot_cases.sum()
     age_pivot_people.loc['누계'] = age_pivot_people.sum()
-    real_count = df_counseling.groupby('연령대')['아이디'].nunique()
-    실계_행 = real_count.reindex(age_pivot_people.columns[:-1]).fillna(0).astype(int)
-    실계_합계 = pd.Series([real_count.sum()], index=['합계'])
-    age_pivot_people.loc['실계'] = pd.concat([실계_행, 실계_합계])
     st.markdown("연령별 이용 인원")
     st.dataframe(age_pivot_people)
     st.markdown("연령별 이용 횟수")
     st.dataframe(age_pivot_cases)
 
+    # 심리진단 이용 인원 및 횟수
     st.markdown("---")
     st.header("심리진단 이용 인원 및 횟수")
-    diag_people = df_diagnosis.groupby(['진단월', '진단명'])['아이디'].nunique().reset_index()
-    diag_people_summary = diag_people.pivot(index='진단월', columns='진단명', values='아이디').fillna(0).astype(int)
+    diag_people = df_diagnosis.groupby(['진단연월', '진단명'])['아이디'].nunique().reset_index()
+    diag_people_summary = diag_people.pivot(index='진단연월', columns='진단명', values='아이디').fillna(0).astype(int)
     diag_people_summary['합계'] = diag_people_summary.sum(axis=1)
     diag_people_summary.loc['누계'] = diag_people_summary.sum()
-    real_diag_people = df_diagnosis.drop_duplicates(subset=['아이디', '진단명']).groupby('진단명')['아이디'].count()
-    실계_행_diag = real_diag_people.reindex(diag_people_summary.columns[:-1]).fillna(0).astype(int)
-    실계_합계_diag = pd.Series([df_diagnosis['아이디'].nunique()], index=['합계'])
-    diag_people_summary.loc['실계'] = pd.concat([실계_행_diag, 실계_합계_diag])
     st.markdown("심리진단 이용 인원")
     st.dataframe(diag_people_summary)
 
-    diag_counts = df_diagnosis.groupby(['진단월', '진단명'])['시행번호'].count().reset_index()
-    diag_counts_summary = diag_counts.pivot(index='진단월', columns='진단명', values='시행번호').fillna(0).astype(int)
+    diag_counts = df_diagnosis.groupby(['진단연월', '진단명'])['시행번호'].count().reset_index()
+    diag_counts_summary = diag_counts.pivot(index='진단연월', columns='진단명', values='시행번호').fillna(0).astype(int)
     diag_counts_summary['합계'] = diag_counts_summary.sum(axis=1)
     diag_counts_summary.loc['누계'] = diag_counts_summary.sum()
     st.markdown("심리진단 이용 횟수")
