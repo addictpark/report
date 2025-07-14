@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 st.title("보고서용 데이터 추출 프로그램")
 st.markdown("---")
@@ -71,11 +72,30 @@ if uploaded_counseling and uploaded_diagnosis:
     if len(all_valid_months) > 0:
         min_month = all_valid_months.min().to_period('M')
         max_month = all_valid_months.max().to_period('M')
-    # 전체 월 목록 생성 (예: 2024-08, ..., 2025-06)
         all_months = pd.period_range(min_month, max_month, freq='M').astype(str).tolist()
     else:
         all_months = []
 
+    # 실제 인원(중복 제거)
+    def clean_id(val):
+        if pd.isnull(val):
+            return None
+        val = str(val).strip().replace(' ', '').replace('\u3000', '').lower()
+        if val.endswith('.0'):
+            val = val[:-2]
+        if not val or val in {'nan', 'none', '0', '0.0'}:
+            return None
+        return val
+
+    counseling_ids = df_counseling['아이디'].apply(clean_id)
+    diagnosis_ids = df_diagnosis['아이디'].apply(clean_id)
+    combined_ids = pd.concat([counseling_ids, diagnosis_ids])
+    unique_ids = combined_ids.dropna().drop_duplicates()
+    실계_인원수 = len(unique_ids)
+
+    with st.expander("실제 인원(중복 제거) 목록"):
+        st.write(unique_ids.tolist())
+        st.write(f"실제 인원 수: {실계_인원수} 명")
 
     # 운영 요약 - 인원수
     st.markdown("---")
@@ -87,19 +107,10 @@ if uploaded_counseling and uploaded_diagnosis:
 
     total_counseling_ids = df_counseling['아이디'].nunique()
     total_diagnosis_ids = df_diagnosis['아이디'].nunique()
-    total_combined_ids = pd.concat([df_counseling[['아이디']], df_diagnosis[['아이디']]]).drop_duplicates()['아이디'].nunique()
     summary.loc[len(summary)] = ['누계', summary['심리상담'].sum(), summary['심리진단'].sum(), summary['합계'].sum()]
-    summary.loc[len(summary)] = ['실계', total_counseling_ids, total_diagnosis_ids, total_combined_ids]
-
+    summary.loc[len(summary)] = ['실계', total_counseling_ids, total_diagnosis_ids, 실계_인원수]   # 실계_인원수 사용!
     st.subheader("서비스 이용 인원")
     st.dataframe(summary, use_container_width=True)
-
-    # 실제 인원(중복 제거)
-    unique_ids = pd.concat([df_counseling[['아이디']], df_diagnosis[['아이디']]])['아이디'].drop_duplicates()
-    unique_ids = unique_ids[unique_ids.notnull() & (unique_ids != "")]
-    with st.expander("실제 인원(중복 제거) 목록"):
-        st.write(unique_ids.tolist())
-        st.write(f"실제 인원 수: {len(unique_ids)} 명")
 
     # 이용 횟수 요약
     summary_count = pd.DataFrame({'연월': all_months})
@@ -114,17 +125,25 @@ if uploaded_counseling and uploaded_diagnosis:
     st.header("상담 통계")
 
     # 상담유형별 인원 및 횟수
+
+    상담_ids_only = df_counseling['아이디'].apply(clean_id)
+    상담_unique_ids = 상담_ids_only.dropna().drop_duplicates()
+    상담_실계_인원수 = len(상담_unique_ids)
+
+    real_type_people = df_counseling.groupby('상담유형')['아이디'].apply(
+        lambda x: x.apply(clean_id).dropna().drop_duplicates().nunique()
+    )
+
     st.subheader("1) 상담유형별 인원 및 횟수")
     type_people = df_counseling.groupby(['상담연월', '상담유형'])['아이디'].nunique().reset_index()
     type_people_summary = type_people.pivot(index='상담연월', columns='상담유형', values='아이디')
     type_people_summary = type_people_summary.reindex(all_months).fillna(0).astype(int)
     type_people_summary['합계'] = type_people_summary.sum(axis=1)
     type_people_summary.loc['누계'] = type_people_summary.sum()
-
-    real_type_people = df_counseling.groupby('상담유형')['아이디'].nunique()
-    실계_행 = real_type_people.reindex(type_people_summary.columns[:-1]).fillna(0).astype(int)
-    실계_합계 = pd.Series([real_type_people.sum()], index=['합계'])
-    type_people_summary.loc['실계'] = pd.concat([실계_행, 실계_합계])
+    
+    실계_행 = real_type_people.reindex(type_people_summary.columns[:-1]).fillna(0).astype(int).tolist()
+    실계_행.append(상담_실계_인원수)  # 마지막 "합계" 칸에는 실제 유니크 내담자수!
+    type_people_summary.loc['실계'] = 실계_행
 
     st.markdown("상담유형별 이용 인원")
     st.dataframe(type_people_summary)
@@ -146,6 +165,36 @@ if uploaded_counseling and uploaded_diagnosis:
     gender_people_summary = gender_people_summary.reindex(all_months).fillna(0).astype(int)
     gender_people_summary['합계'] = gender_people_summary.sum(axis=1)
     gender_people_summary.loc['누계'] = gender_people_summary.sum()
+
+    # (1) 아이디별 성별 정보 추출
+    id_gender_df = df_counseling[['아이디', '성별']].drop_duplicates()
+    id_gender_df['아이디'] = id_gender_df['아이디'].apply(clean_id)
+
+    # 아이디 값이 None/빈칸인 행 제외
+    id_gender_df = id_gender_df[~id_gender_df['아이디'].isnull() & (id_gender_df['아이디'] != '')]
+
+    # 실계 아이디 (중복제거)
+    unique_ids = id_gender_df['아이디'].drop_duplicates()
+    실계_인원수 = len(unique_ids)
+
+    # 성별별 실계 인원 구하기
+    실계_성별_인원수 = id_gender_df['성별'].value_counts()
+    실계_성별_인원수 = 실계_성별_인원수.reindex(gender_people_summary.columns[:-1], fill_value=0)
+
+    # 표 맨 아래 '실계' 행 추가
+    id_gender_df = df_counseling[['아이디', '성별']].drop_duplicates()
+    id_gender_df['아이디'] = id_gender_df['아이디'].apply(clean_id)
+    id_gender_df = id_gender_df[~id_gender_df['아이디'].isnull() & (id_gender_df['아이디'] != '')]
+    unique_ids = id_gender_df['아이디'].drop_duplicates()
+    실계_인원수 = len(unique_ids)
+    실계_성별_인원수 = id_gender_df['성별'].value_counts()
+    실계_성별_인원수 = 실계_성별_인원수.reindex(gender_people_summary.columns[:-1], fill_value=0)
+
+    # ★ [수정 포인트]
+    실계_행 = 실계_성별_인원수.tolist()
+    실계_행.append(실계_인원수)  # 마지막에 실제 인원수 할당!
+    gender_people_summary.loc['실계'] = 실계_행
+
     st.markdown("성별 이용 인원")
     st.dataframe(gender_people_summary)
 
@@ -169,11 +218,52 @@ if uploaded_counseling and uploaded_diagnosis:
     age_pivot_people['합계'] = age_pivot_people.sum(axis=1)
 
     age_pivot_cases = age_monthly.pivot(index='상담연월', columns='연령대', values='건수')
-    age_pivot_cases = age_pivot_people.reindex(all_months).fillna(0).astype(int)
+    age_pivot_cases = age_pivot_cases.reindex(all_months).fillna(0).astype(int) 
     age_pivot_cases['합계'] = age_pivot_cases.sum(axis=1)
     age_pivot_cases = age_pivot_cases[age_pivot_cases.index != 'NaT']
     age_pivot_cases.loc['합계'] = age_pivot_cases.sum()
     age_pivot_people.loc['누계'] = age_pivot_people.sum()
+
+    id_age_df = df_counseling[['아이디', '연령대']].drop_duplicates()
+    id_age_df['아이디'] = id_age_df['아이디'].apply(clean_id)
+    id_age_df = id_age_df[~id_age_df['아이디'].isnull() & (id_age_df['아이디'] != '')]
+
+    # 실계 아이디(중복제거)
+    unique_ids = id_age_df['아이디'].drop_duplicates()
+    실계_인원수 = len(unique_ids)
+
+    last_age = (
+        df_counseling
+        .sort_values(['아이디', '상담실시일'])
+        .groupby('아이디')
+        .tail(1)[['아이디','연령대']]
+    )
+
+    # 연령대별 실계 인원 구하기
+    실계_연령별_인원수 = last_age['연령대'].value_counts().reindex(age_pivot_people.columns[:-1], fill_value=0)
+    실계_인원수 = len(last_age)
+
+    # 실계 행 추가
+    id_age_df = df_counseling[['아이디', '연령대']].drop_duplicates()
+    id_age_df['아이디'] = id_age_df['아이디'].apply(clean_id)
+    id_age_df = id_age_df[~id_age_df['아이디'].isnull() & (id_age_df['아이디'] != '')]
+    unique_ids = id_age_df['아이디'].drop_duplicates()
+    실계_인원수 = len(unique_ids)
+
+    last_age = (
+        df_counseling
+        .sort_values(['아이디', '상담실시일'])
+        .groupby('아이디')
+        .tail(1)[['아이디', '연령대']]
+    )
+    실계_연령별_인원수 = last_age['연령대'].value_counts().reindex(age_pivot_people.columns[:-1], fill_value=0)
+    실계_인원수 = len(last_age)
+
+    # ★ [수정 포인트]
+    실계_행 = 실계_연령별_인원수.tolist()
+    실계_행.append(실계_인원수)  # 마지막에 실제 인원수 할당!
+    age_pivot_people.loc['실계'] = 실계_행
+
     st.markdown("연령별 이용 인원")
     st.dataframe(age_pivot_people)
     st.markdown("연령별 이용 횟수")
@@ -283,7 +373,7 @@ if uploaded_counseling and uploaded_diagnosis:
         ('재정 및 법률자문 등', '법률상담(변호사)'): '개인',
         ('재정 및 법률자문 등', '회계상담(회계사)'): '개인',
         ('재정 및 법률자문 등', '재무상담(재무설계사)'): '개인',
-        ('재정 및 법률자문 등', '세무상담(세무사'): '개인',
+        ('재정 및 법률자문 등', '세무상담(세무사)'): '개인',
         ('재정 및 법률자문 등', '건강상담'): '개인',
     }
 
@@ -368,6 +458,7 @@ if uploaded_counseling and uploaded_diagnosis:
     st.header("내담자별 전체 상담 이용 횟수")
     client_counts = df_counseling.groupby('아이디')['사례번호'].count().reset_index()
     client_counts.columns = ['아이디', '상담횟수']
+    client_counts['아이디'] = client_counts['아이디'].apply(lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.', '', 1).isdigit() else str(x))
     client_counts.index = client_counts.index + 1
     client_counts.reset_index(inplace=True)
     client_counts.rename(columns={'index': 'No'}, inplace=True)
@@ -380,4 +471,29 @@ if uploaded_counseling and uploaded_diagnosis:
     client_counts_with_total = pd.concat([client_counts, total_row], ignore_index=True)
     st.dataframe(client_counts_with_total, use_container_width=True)
 
-    st.success("모든 결과가 정상적으로 출력되었습니다.")
+    # 마지막 달 찾기
+    last_month = df_counseling['상담연월'].max()
+
+    # 마지막 달 내담자별 상담횟수
+    last_month_df = df_counseling[df_counseling['상담연월'] == last_month]
+    client_counts_last = last_month_df.groupby('아이디')['사례번호'].count().reset_index()
+    client_counts_last.columns = ['아이디', '상담횟수']
+    client_counts_last['아이디'] = client_counts_last['아이디'].apply(
+        lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.', '', 1).isdigit() else str(x)
+    )
+    client_counts_last.index = client_counts_last.index + 1
+    client_counts_last.reset_index(inplace=True)
+    client_counts_last.rename(columns={'index': 'No'}, inplace=True)
+
+    total_row_last = pd.DataFrame([{
+        'No': '합계',
+        '아이디': f"총 {client_counts_last['아이디'].nunique()}명",
+        '상담횟수': client_counts_last['상담횟수'].sum()
+    }])
+    client_counts_last_with_total = pd.concat([client_counts_last, total_row_last], ignore_index=True)
+
+    # 출력
+    st.subheader(f"{last_month} 내담자별 상담 이용 횟수")
+    st.dataframe(client_counts_last_with_total, use_container_width=True)
+
+    st.write("Unique:", unique_ids.tolist())
