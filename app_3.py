@@ -470,30 +470,3 @@ if uploaded_counseling and uploaded_diagnosis:
     }])
     client_counts_with_total = pd.concat([client_counts, total_row], ignore_index=True)
     st.dataframe(client_counts_with_total, use_container_width=True)
-
-    # 마지막 달 찾기
-    last_month = df_counseling['상담연월'].max()
-
-    # 마지막 달 내담자별 상담횟수
-    last_month_df = df_counseling[df_counseling['상담연월'] == last_month]
-    client_counts_last = last_month_df.groupby('아이디')['사례번호'].count().reset_index()
-    client_counts_last.columns = ['아이디', '상담횟수']
-    client_counts_last['아이디'] = client_counts_last['아이디'].apply(
-        lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.', '', 1).isdigit() else str(x)
-    )
-    client_counts_last.index = client_counts_last.index + 1
-    client_counts_last.reset_index(inplace=True)
-    client_counts_last.rename(columns={'index': 'No'}, inplace=True)
-
-    total_row_last = pd.DataFrame([{
-        'No': '합계',
-        '아이디': f"총 {client_counts_last['아이디'].nunique()}명",
-        '상담횟수': client_counts_last['상담횟수'].sum()
-    }])
-    client_counts_last_with_total = pd.concat([client_counts_last, total_row_last], ignore_index=True)
-
-    # 출력
-    st.subheader(f"{last_month} 내담자별 상담 이용 횟수")
-    st.dataframe(client_counts_last_with_total, use_container_width=True)
-
-    st.write("Unique:", unique_ids.tolist())
