@@ -2,6 +2,23 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+def clean_str(s):
+    if pd.isnull(s):
+        return ""
+    return str(s).strip().replace(" ", "").lower()
+
+combined_mapping_dict_clean = {
+    (clean_str(k1), clean_str(k2)): v
+    for (k1, k2), v in combined_mapping_dict.items()
+}
+
+def map_region(row):
+    if clean_str(row['주호소1']) == '기타':
+        return '기타'
+    return combined_mapping_dict_clean.get(
+        (clean_str(row['주호소1']), clean_str(row['하위요소1'])), None
+    )
+
 st.sidebar.title("📋 메뉴")
 menu = st.sidebar.radio("이동할 섹션을 선택하세요:", [
     "📁 파일 업로드 및 결측치 확인",
@@ -501,23 +518,6 @@ elif menu == "🗂️ 상담 주제별 통계":
         ('재정 및 법률자문 등', '세무상담(세무사)'): '개인',
         ('재정 및 법률자문 등', '건강상담'): '개인',
     }
-
-    def clean_str(s):
-        if pd.isnull(s):
-            return ""
-        return str(s).strip().replace(" ", "").lower()
-
-    combined_mapping_dict_clean = {
-        (clean_str(k1), clean_str(k2)): v
-        for (k1, k2), v in combined_mapping_dict.items()
-    }
-
-    def map_region(row):
-        if clean_str(row['주호소1']) == '기타':
-            return '기타'
-        return combined_mapping_dict_clean.get(
-            (clean_str(row['주호소1']), clean_str(row['하위요소1'])), None
-        )
 
 # --- 집계 함수 정의 ---
 def make_topic_stats_with_area(df, main_col, sub_col, header_text):
