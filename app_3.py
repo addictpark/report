@@ -17,9 +17,11 @@ with col1:
 with col2:
     uploaded_diagnosis = st.file_uploader("진단 이력 엑셀 파일", type=["xlsx"], key="diagnosis")
 
-if uploaded_counseling and uploaded_diagnosis:
+if uploaded_counseling:
     df_counseling = pd.read_excel(uploaded_counseling)
     df_counseling.columns = df_counseling.columns.str.strip()
+    
+    # 개인정보 열 확인
     sensitive_columns = ['신청직원이름', '휴대폰번호']
     sensitive_found = [col for col in sensitive_columns if col in df_counseling.columns]
     if sensitive_found:
@@ -28,7 +30,17 @@ if uploaded_counseling and uploaded_diagnosis:
             "해당 열을 삭제한 후 다시 업로드해 주세요."
         )
         st.stop()
-    df_diagnosis = pd.read_excel(uploaded_diagnosis)
+    
+    # 진단 파일이 있는 경우만 처리
+    if uploaded_diagnosis:
+        df_diagnosis = pd.read_excel(uploaded_diagnosis)
+        df_diagnosis.columns = df_diagnosis.columns.str.strip()
+        df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
+        df_diagnosis['진단연월'] = df_diagnosis['진단실시일'].dt.to_period('M').astype(str)
+    else:
+        # 진단 파일이 없으면 빈 DataFrame 생성
+        df_diagnosis = pd.DataFrame(columns=['아이디', '진단실시일', '진단연월', '진단명', '시행번호'])
+        st.warning("⚠️ 진단 이력 파일이 업로드되지 않았습니다. 상담 이력만 분석합니다.")
 
     # 날짜 변환 및 연월 처리
     df_counseling['상담실시일'] = pd.to_datetime(df_counseling['상담실시일'], errors='coerce')
