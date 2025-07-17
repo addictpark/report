@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-    # --- 대분류 매핑 ---
+# --- 대분류 매핑 ---
 combined_mapping_dict = {
     ('직장 내 대인관계', '상사와의 갈등'): '직장',
     ('직장 내 대인관계', '부하와의 갈등'): '직장',
@@ -107,6 +107,40 @@ def map_region(row):
     return combined_mapping_dict_clean.get(
         (clean_str(row['주호소1']), clean_str(row['하위요소1'])), None
     )
+def make_area_sum_table(df, area_col, main_col, sub_col, label=""):
+    temp = df.dropna(subset=[main_col, sub_col])
+    area_sum = (
+        temp.groupby(area_col).size().reset_index(name='영역별 상담건수 합계')
+        .sort_values('영역별 상담건수 합계', ascending=False)
+    )
+    total_row = pd.DataFrame({
+        area_col: ['합계'],
+        '영역별 상담건수 합계': [area_sum['영역별 상담건수 합계'].sum()]
+    })
+    area_sum_with_total = pd.concat([area_sum, total_row], ignore_index=True)
+    st.markdown(f"#### {label} 영역별 상담건수 합계")
+    st.dataframe(area_sum_with_total)
+
+def make_main_issue_sum_table(df, area_col, main_col, label=""):
+    # 영역별 주호소별 상담건수 합계
+    count_df = (
+        df
+        .dropna(subset=[area_col, main_col])
+        .groupby([area_col, main_col])
+        .size()
+        .reset_index(name=f"{main_col}별 상담건수 합계")
+        .sort_values([area_col, f"{main_col}별 상담건수 합계"], ascending=[True, False])
+        .reset_index(drop=True)
+    )
+    # 합계 행 추가
+    total_row = pd.DataFrame({
+        area_col: ['합계'],
+        main_col: [''],
+        f"{main_col}별 상담건수 합계": [count_df[f"{main_col}별 상담건수 합계"].sum()]
+    })
+    count_df_with_total = pd.concat([count_df, total_row], ignore_index=True)
+    st.markdown(f"#### {label} {main_col}별 상담건수 합계")
+    st.dataframe(count_df_with_total)
 
 st.sidebar.title("📋 메뉴")
 menu = st.sidebar.radio("이동할 섹션을 선택하세요:", [
@@ -536,51 +570,17 @@ def make_topic_stats_with_area(df, main_col, sub_col, header_text):
         with st.expander(f"{main_col} 또는 {sub_col} 결측치 행 보기"):
             st.dataframe(df[df[main_col].isnull() | df[sub_col].isnull()][['사례번호', '아이디', '상담실시일', '영역', main_col, sub_col]])
 
-def make_area_sum_table(df, area_col, main_col, sub_col, label=""):
-    temp = df.dropna(subset=[main_col, sub_col])
-    area_sum = (
-        temp.groupby(area_col).size().reset_index(name='영역별 상담건수 합계')
-        .sort_values('영역별 상담건수 합계', ascending=False)
-    )
-    total_row = pd.DataFrame({
-        area_col: ['합계'],
-        '영역별 상담건수 합계': [area_sum['영역별 상담건수 합계'].sum()]
-    })
-    area_sum_with_total = pd.concat([area_sum, total_row], ignore_index=True)
-    st.markdown(f"#### {label} 영역별 상담건수 합계")
-    st.dataframe(area_sum_with_total)
-
-def make_main_issue_sum_table(df, area_col, main_col, label=""):
-    # 영역별 주호소별 상담건수 합계
-    count_df = (
-        df
-        .dropna(subset=[area_col, main_col])
-        .groupby([area_col, main_col])
-        .size()
-        .reset_index(name=f"{main_col}별 상담건수 합계")
-        .sort_values([area_col, f"{main_col}별 상담건수 합계"], ascending=[True, False])
-        .reset_index(drop=True)
-    )
-    # 합계 행 추가
-    total_row = pd.DataFrame({
-        area_col: ['합계'],
-        main_col: [''],
-        f"{main_col}별 상담건수 합계": [count_df[f"{main_col}별 상담건수 합계"].sum()]
-    })
-    count_df_with_total = pd.concat([count_df, total_row], ignore_index=True)
-    st.markdown(f"#### {label} {main_col}별 상담건수 합계")
-    st.dataframe(count_df_with_total)
-
-
 # --- 실제 집계 표 출력 ---
 if menu == "🗂️ 상담 주제별 통계":
     st.header("상담 주제별 통계 (영역 포함)")
-    make_topic_stats_with_area(df_counseling, '주호소1', '하위요소1', "1) 영역 · 주호소1 · 하위요소1")
+    make_topic_stats_with_area(df_counseling.rename(columns={'영역1': '영역'}), '주호소1', '하위요소1', "1) 영역 · 주호소1 · 하위요소1")
     make_area_sum_table(df_counseling, '영역1', '주호소1', '하위요소1', label="주호소1")
     make_main_issue_sum_table(df_counseling, '영역1', '주호소1')
-    make_topic_stats_with_area(df_counseling, '주호소2', '하위요소2', "2) 영역 · 주호소2 · 하위요소2")
+
+    make_topic_stats_with_area(df_counseling.rename(columns={'영역2': '영역'}), '주호소2', '하위요소2', "2) 영역 · 주호소2 · 하위요소2")
     make_area_sum_table(df_counseling, '영역2', '주호소2', '하위요소2', label="주호소2")
     make_main_issue_sum_table(df_counseling, '영역2', '주호소2')
-    make_topic_stats_with_area(df_counseling, '주호소3', '하위요소3', "3) 영역 · 주호소3 · 하위요소3")
+
+    make_topic_stats_with_area(df_counseling.rename(columns={'영역3': '영역'}), '주호소3', '하위요소3', "3) 영역 · 주호소3 · 하위요소3")
     make_area_sum_table(df_counseling, '영역3', '주호소3', '하위요소3', label="주호소3")
     make_main_issue_sum_table(df_counseling, '영역3', '주호소3')
