@@ -206,7 +206,6 @@ if menu == "📁 파일 업로드 및 결측치 확인":
             df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
             df_diagnosis['진단연월'] = df_diagnosis['진단실시일'].dt.to_period('M').astype(str)
 
-
         # 결측치 요약
         def missing_summary(df, name):
             summary = pd.DataFrame({
