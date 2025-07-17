@@ -2,155 +2,125 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-st.sidebar.title("📋 메뉴")
-menu = st.sidebar.radio("이동할 섹션을 선택하세요:", [
-    "📁 파일 업로드 및 결측치 확인",
-    "📊 운영 요약",
-    "📈 상담 통계",
-    "🧠 심리진단 통계",
-    "🗂️ 상담 주제별 통계"
-])
+st.title("보고서용 데이터 추출 프로그램")
+st.markdown("---")
+st.info(
+    "업로드 전 꼭 확인하세요!\n"
+    "- 상담 이력 엑셀 파일에서 아이디와 휴대전화번호 등 개인정보를 반드시 삭제한 후 업로드해야 합니다.\n"
+    "- 해당 열(컬럼)은 반드시 삭제 또는 비식별(빈칸) 처리 후 업로드하세요."
+)
 
-# --- 1. 파일 업로드 및 결측치 확인 ---
-if menu == "📁 파일 업로드 및 결측치 확인":
-    st.title("보고서용 데이터 추출 프로그램")
+st.header("파일 업로드")
+col1, col2 = st.columns(2)
+with col1:
+    uploaded_counseling = st.file_uploader("상담 이력 엑셀 파일", type=["xlsx"], key="counseling")
+with col2:
+    uploaded_diagnosis = st.file_uploader("진단 이력 엑셀 파일", type=["xlsx"], key="diagnosis")
+
+if uploaded_counseling:
+    df_counseling = pd.read_excel(uploaded_counseling)
+    df_counseling.columns = df_counseling.columns.str.strip()
+    
+    # 개인정보 열 확인
+    sensitive_columns = ['신청직원이름', '휴대폰번호']
+    sensitive_found = [col for col in sensitive_columns if col in df_counseling.columns]
+    if sensitive_found:
+        st.error(
+            f"업로드 파일에 개인정보 열({', '.join(sensitive_found)})이 포함되어 있어 분석을 중단합니다.\n\n"
+            "해당 열을 삭제한 후 다시 업로드해 주세요."
+        )
+        st.stop()
+    
+    # 진단 파일이 있는 경우만 처리
+    if uploaded_diagnosis:
+        df_diagnosis = pd.read_excel(uploaded_diagnosis)
+        df_diagnosis.columns = df_diagnosis.columns.str.strip()
+        df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
+        df_diagnosis['진단연월'] = df_diagnosis['진단실시일'].dt.to_period('M').astype(str)
+    else:
+        # 진단 파일이 없으면 빈 DataFrame 생성
+        df_diagnosis = pd.DataFrame(columns=['아이디', '진단실시일', '진단연월', '진단명', '시행번호'])
+        st.warning("⚠️ 진단 이력 파일이 업로드되지 않았습니다. 상담 이력만 분석합니다.")
+
+    # 날짜 변환 및 연월 처리
+    df_counseling['상담실시일'] = pd.to_datetime(df_counseling['상담실시일'], errors='coerce')
+    df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
+    df_counseling['상담연월'] = df_counseling['상담실시일'].dt.to_period('M').astype(str)
+    df_diagnosis['진단연월'] = df_diagnosis['진단실시일'].dt.to_period('M').astype(str)
+
+    # 연령대, 성별 등
+    df_counseling['연령대'] = (df_counseling['신청직원나이'] // 10 * 10).astype('Int64').astype(str) + '대'
+    df_counseling['성별'] = df_counseling['신청직원성별'].fillna('미상')
+
+    # 결측치 요약
+    def missing_summary(df, name):
+        summary = pd.DataFrame({
+            '결측치 수': df.isnull().sum(),
+            '전체 행 수': len(df)
+        })
+        summary['결측률(%)'] = (summary['결측치 수'] / summary['전체 행 수'] * 100).round(1)
+        summary = summary[summary['결측치 수'] > 0]
+        if summary.empty:
+            st.success(f"{name} 데이터에 결측치가 없습니다.")
+        else:
+            st.warning(f"{name} 데이터에 결측치가 있습니다.")
+            st.dataframe(summary)
+
     st.markdown("---")
-    st.info(
-        "업로드 전 꼭 확인하세요!\n"
-        "- 상담 이력 엑셀 파일에서 아이디와 휴대전화번호 등 개인정보를 반드시 삭제한 후 업로드해야 합니다.\n"
-        "- 해당 열(컬럼)은 반드시 삭제 또는 비식별(빈칸) 처리 후 업로드하세요."
-    )
-
+    st.header("전체 결측치 요약표")
     col1, col2 = st.columns(2)
     with col1:
-        uploaded_counseling = st.file_uploader("상담 이력 엑셀 파일", type=["xlsx"], key="counseling")
+        with st.expander("상담 이력 결측치"):
+            missing_summary(df_counseling, "상담 이력")
     with col2:
-        uploaded_diagnosis = st.file_uploader("진단 이력 엑셀 파일", type=["xlsx"], key="diagnosis")
+        with st.expander("진단 이력 결측치"):
+            missing_summary(df_diagnosis, "진단 이력")
 
-    if uploaded_counseling is not None:
-        df_counseling = pd.read_excel(uploaded_counseling)
-        df_counseling.columns = df_counseling.columns.str.strip()
-        df_counseling['영역1'] = df_counseling.apply(
-            lambda row: map_region({'주호소1': row['주호소1'], '하위요소1': row['하위요소1']}), axis=1)
-        df_counseling['영역2'] = df_counseling.apply(
-            lambda row: map_region({'주호소1': row['주호소2'], '하위요소1': row['하위요소2']}), axis=1)
-        df_counseling['영역3'] = df_counseling.apply(
-            lambda row: map_region({'주호소1': row['주호소3'], '하위요소1': row['하위요소3']}), axis=1)
-        st.session_state['df_counseling'] = df_counseling
+    # 연-월 기준 월 목록
+    valid_months_counseling = df_counseling['상담실시일'].dropna()
+    valid_months_diagnosis = df_diagnosis['진단실시일'].dropna()
+    all_valid_months = pd.concat([valid_months_counseling, valid_months_diagnosis])
 
-        # 개인정보 열 확인
-        sensitive_columns = ['신청직원이름', '휴대폰번호']
-        sensitive_found = [col for col in sensitive_columns if col in df_counseling.columns]
-        if sensitive_found:
-            st.error(
-                f"업로드 파일에 개인정보 열({', '.join(sensitive_found)})이 포함되어 있어 분석을 중단합니다.\n\n"
-                "해당 열을 삭제한 후 다시 업로드해 주세요."
-            )
-            st.stop()
+    if len(all_valid_months) > 0:
+        min_month = all_valid_months.min().to_period('M')
+        max_month = all_valid_months.max().to_period('M')
+        all_months = pd.period_range(min_month, max_month, freq='M').astype(str).tolist()
+    else:
+        all_months = []
 
-        # 진단 데이터
-        if uploaded_diagnosis is not None:
-            df_diagnosis = pd.read_excel(uploaded_diagnosis)
-            df_diagnosis.columns = df_diagnosis.columns.str.strip()
-        else:
-            df_diagnosis = pd.DataFrame(columns=['아이디', '진단실시일', '진단연월', '진단명', '시행번호'])
-            st.warning("⚠️ 진단 이력 파일이 업로드되지 않았습니다. 상담 이력만 분석합니다.")
+    # 실제 인원(중복 제거)
+    def clean_id(val):
+        if pd.isnull(val):
+            return None
+        val = str(val).strip().replace(' ', '').replace('\u3000', '').lower()
+        if val.endswith('.0'):
+            val = val[:-2]
+        if not val or val in {'nan', 'none', '0', '0.0'}:
+            return None
+        return val
 
-        # 날짜, 연월, 연령대, 성별 등 전처리
-        df_counseling['상담실시일'] = pd.to_datetime(df_counseling['상담실시일'], errors='coerce')
-        df_counseling['상담연월'] = df_counseling['상담실시일'].dt.to_period('M').astype(str)
-        df_counseling['연령대'] = (df_counseling['신청직원나이'] // 10 * 10).astype('Int64').astype(str) + '대'
-        df_counseling['성별'] = df_counseling['신청직원성별'].fillna('미상')
+    counseling_ids = df_counseling['아이디'].apply(clean_id)
+    diagnosis_ids = df_diagnosis['아이디'].apply(clean_id)
+    combined_ids = pd.concat([counseling_ids, diagnosis_ids])
+    unique_ids = combined_ids.dropna().drop_duplicates()
+    실계_인원수 = len(unique_ids)
 
-        if len(df_diagnosis) > 0:
-            df_diagnosis['진단실시일'] = pd.to_datetime(df_diagnosis['진단실시일'], errors='coerce')
-            df_diagnosis['진단연월'] = df_diagnosis['진단실시일'].dt.to_period('M').astype(str)
+    with st.expander("실제 인원(중복 제거) 목록"):
+        st.write(unique_ids.tolist())
+        st.write(f"실제 인원 수: {실계_인원수} 명")
 
-
-        # 결측치 요약
-        def missing_summary(df, name):
-            summary = pd.DataFrame({
-                '결측치 수': df.isnull().sum(),
-                '전체 행 수': len(df)
-            })
-            summary['결측률(%)'] = (summary['결측치 수'] / summary['전체 행 수'] * 100).round(1)
-            summary = summary[summary['결측치 수'] > 0]
-            if summary.empty:
-                st.success(f"{name} 데이터에 결측치가 없습니다.")
-            else:
-                st.warning(f"{name} 데이터에 결측치가 있습니다.")
-                st.dataframe(summary)
-
-        st.markdown("---")
-        st.header("전체 결측치 요약표")
-        col1, col2 = st.columns(2)
-        with col1:
-            with st.expander("상담 이력 결측치"):
-                missing_summary(df_counseling, "상담 이력")
-        with col2:
-            with st.expander("진단 이력 결측치"):
-                missing_summary(df_diagnosis, "진단 이력")
-
-        # 월 목록 구하기
-        valid_months_counseling = df_counseling['상담실시일'].dropna()
-        valid_months_diagnosis = df_diagnosis['진단실시일'].dropna()
-        all_valid_months = pd.concat([valid_months_counseling, valid_months_diagnosis])
-
-        if len(all_valid_months) > 0:
-            min_month = all_valid_months.min().to_period('M')
-            max_month = all_valid_months.max().to_period('M')
-            all_months = pd.period_range(min_month, max_month, freq='M').astype(str).tolist()
-        else:
-            all_months = []
-
-        st.session_state['df_counseling'] = df_counseling
-        st.session_state['df_diagnosis'] = df_diagnosis
-        st.session_state['all_months'] = all_months
-
-        # ID 클리닝
-        def clean_id(val):
-            if pd.isnull(val):
-                return None
-            val = str(val).strip().replace(' ', '').replace('\u3000', '').lower()
-            if val.endswith('.0'):
-                val = val[:-2]
-            if not val or val in {'nan', 'none', '0', '0.0'}:
-                return None
-            return val
-
-        counseling_ids = df_counseling['아이디'].apply(clean_id)
-        diagnosis_ids = df_diagnosis['아이디'].apply(clean_id)
-        combined_ids = pd.concat([counseling_ids, diagnosis_ids])
-        unique_ids = combined_ids.dropna().drop_duplicates()
-        실계_인원수 = len(unique_ids)
-
-        # 세션에 저장 (다음 메뉴에서 사용)
-        st.session_state['df_counseling'] = df_counseling
-        st.session_state['df_diagnosis'] = df_diagnosis
-        st.session_state['실계_인원수'] = 실계_인원수
-        st.session_state['all_months'] = all_months
-
-        with st.expander("실제 인원(중복 제거) 목록"):
-            st.write(unique_ids.tolist())
-            st.write(f"실제 인원 수: {실계_인원수} 명")
-
-# --- 2. 운영 요약 ---
-elif menu == "📊 운영 요약":
-    if 'df_counseling' not in st.session_state or 'df_diagnosis' not in st.session_state:
-        st.warning("먼저 '파일 업로드'에서 데이터를 업로드해 주세요.")
-        st.stop()
-    df_counseling = st.session_state['df_counseling']
-    df_diagnosis = st.session_state['df_diagnosis']
-    실계_인원수 = st.session_state['실계_인원수']
-    all_months = st.session_state['all_months']
-
-    st.header("📊 운영 요약")
+    # 운영 요약 - 인원수
+    st.markdown("---")
+    st.header("운영 요약")
     summary = pd.DataFrame({'연월': all_months})
     summary['심리상담'] = summary['연월'].apply(lambda m: df_counseling[df_counseling['상담연월']==m]['아이디'].nunique())
     summary['심리진단'] = summary['연월'].apply(lambda m: df_diagnosis[df_diagnosis['진단연월']==m]['아이디'].nunique())
     summary['합계'] = summary['심리상담'] + summary['심리진단']
+
+    total_counseling_ids = df_counseling['아이디'].nunique()
+    total_diagnosis_ids = df_diagnosis['아이디'].nunique()
     summary.loc[len(summary)] = ['누계', summary['심리상담'].sum(), summary['심리진단'].sum(), summary['합계'].sum()]
-    summary.loc[len(summary)] = ['실계', df_counseling['아이디'].nunique(), df_diagnosis['아이디'].nunique(), 실계_인원수]
+    summary.loc[len(summary)] = ['실계', total_counseling_ids, total_diagnosis_ids, 실계_인원수]   # 실계_인원수 사용!
     st.subheader("서비스 이용 인원")
     st.dataframe(summary, use_container_width=True)
 
@@ -163,25 +133,10 @@ elif menu == "📊 운영 요약":
     st.subheader("서비스 이용 횟수")
     st.dataframe(summary_count, use_container_width=True)
 
-# --- 3. 상담 통계 ---
-elif menu == "📈 상담 통계":
-    if 'df_counseling' not in st.session_state or 'all_months' not in st.session_state:
-        st.warning("먼저 '파일 업로드'에서 데이터를 업로드해 주세요.")
-        st.stop()
-    df_counseling = st.session_state['df_counseling']
-    all_months = st.session_state['all_months']
+    st.markdown("---")
+    st.header("상담 통계")
 
-    st.header("📈 상담 통계")
     # 상담유형별 인원 및 횟수
-    def clean_id(val):
-        if pd.isnull(val):
-            return None
-        val = str(val).strip().replace(' ', '').replace('\u3000', '').lower()
-        if val.endswith('.0'):
-            val = val[:-2]
-        if not val or val in {'nan', 'none', '0', '0.0'}:
-            return None
-        return val
 
     상담_ids_only = df_counseling['아이디'].apply(clean_id)
     상담_unique_ids = 상담_ids_only.dropna().drop_duplicates()
@@ -195,18 +150,11 @@ elif menu == "📈 상담 통계":
     type_people = df_counseling.groupby(['상담연월', '상담유형'])['아이디'].nunique().reset_index()
     type_people_summary = type_people.pivot(index='상담연월', columns='상담유형', values='아이디')
     type_people_summary = type_people_summary.reindex(all_months).fillna(0).astype(int)
-    
-    real_monthly_people = (
-        df_counseling.dropna(subset=['상담연월', '아이디'])
-        .groupby('상담연월')['아이디'].nunique()
-        .reindex(all_months).fillna(0).astype(int) 
-    )
-
-    type_people_summary['합계'] = type_people_summary.index.map(real_monthly_people).fillna(0).astype(int)
+    type_people_summary['합계'] = type_people_summary.sum(axis=1)
     type_people_summary.loc['누계'] = type_people_summary.sum()
-
+    
     실계_행 = real_type_people.reindex(type_people_summary.columns[:-1]).fillna(0).astype(int).tolist()
-    실계_행.append(상담_실계_인원수)
+    실계_행.append(상담_실계_인원수)  # 마지막 "합계" 칸에는 실제 유니크 내담자수!
     type_people_summary.loc['실계'] = 실계_행
 
     st.markdown("상담유형별 이용 인원")
@@ -333,68 +281,13 @@ elif menu == "📈 상담 통계":
     st.markdown("연령별 이용 횟수")
     st.dataframe(age_pivot_cases)
 
-    st.markdown("---")
-    st.header("내담자별 전체 상담 이용 횟수")
-    client_counts = df_counseling.groupby('아이디')['사례번호'].count().reset_index()
-    client_counts.columns = ['아이디', '상담횟수']
-    client_counts['아이디'] = client_counts['아이디'].apply(lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.', '', 1).isdigit() else str(x))
-    client_counts.index = client_counts.index + 1
-    client_counts.reset_index(inplace=True)
-    client_counts.rename(columns={'index': 'No'}, inplace=True)
-
-    total_row = pd.DataFrame([{
-        'No': '합계',
-        '아이디': f"총 {client_counts['아이디'].nunique()}명",
-        '상담횟수': client_counts['상담횟수'].sum()
-    }])
-    client_counts_with_total = pd.concat([client_counts, total_row], ignore_index=True)
-    st.dataframe(client_counts_with_total, use_container_width=True)
-
     # 심리진단 이용 인원 및 횟수
-elif menu == "🧠 심리진단 통계":
-    if 'df_diagnosis' not in st.session_state or 'all_months' not in st.session_state:
-        st.warning("먼저 '파일 업로드'에서 데이터를 업로드해 주세요.")
-        st.stop()
-    df_diagnosis = st.session_state['df_diagnosis']
-    all_months = st.session_state['all_months']
-
-    st.header("🧠 심리진단 이용 인원 및 횟수")
+    st.markdown("---")
+    st.header("심리진단 이용 인원 및 횟수")
     diag_people = df_diagnosis.groupby(['진단연월', '진단명'])['아이디'].nunique().reset_index()
     diag_people_summary = diag_people.pivot(index='진단연월', columns='진단명', values='아이디').fillna(0).astype(int)
-
-    real_monthly_people = (
-        df_diagnosis.dropna(subset=['진단연월', '아이디'])
-        .groupby('진단연월')['아이디'].nunique()
-    )
-
-    diag_people_summary['합계'] = diag_people_summary.index.map(real_monthly_people)
+    diag_people_summary['합계'] = diag_people_summary.sum(axis=1)
     diag_people_summary.loc['누계'] = diag_people_summary.sum()
-
-    def clean_id(val):
-        if pd.isnull(val):
-            return None
-        val = str(val).strip().replace(' ', '').replace('\u3000', '').lower()
-        if val.endswith('.0'):
-            val = val[:-2]
-        if not val or val in {'nan', 'none', '0', '0.0'}:
-            return None
-        return val
-
-    real_by_test = (
-        df_diagnosis.dropna(subset=['진단명', '아이디'])
-        .assign(아이디=lambda x: x['아이디'].apply(clean_id))
-        .dropna(subset=['아이디'])
-        .drop_duplicates(['진단명', '아이디'])
-        .groupby('진단명')['아이디'].nunique()
-    )
-    real_people_count = (
-        df_diagnosis['아이디'].apply(clean_id).dropna().drop_duplicates().shape[0]
-    )
-
-    row_dict = {col: int(real_by_test[col]) if col in real_by_test and pd.notnull(real_by_test[col]) else 0 for col in diag_people_summary.columns}
-    row_dict['합계'] = real_people_count
-    diag_people_summary.loc['실계'] = row_dict
-
     st.markdown("심리진단 이용 인원")
     st.dataframe(diag_people_summary)
 
@@ -404,15 +297,9 @@ elif menu == "🧠 심리진단 통계":
     diag_counts_summary.loc['누계'] = diag_counts_summary.sum()
     st.markdown("심리진단 이용 횟수")
     st.dataframe(diag_counts_summary)
+
     st.markdown("---")
-
-elif menu == "🗂️ 상담 주제별 통계":
-    if 'df_counseling' not in st.session_state:
-        st.warning("먼저 '파일 업로드'에서 상담 데이터를 업로드해 주세요.")
-        st.stop()
-    df_counseling = st.session_state['df_counseling']
-
-    # --- 대분류 매핑 ---
+    # 대분류 매핑
     combined_mapping_dict = {
         ('직장 내 대인관계', '상사와의 갈등'): '직장',
         ('직장 내 대인관계', '부하와의 갈등'): '직장',
@@ -519,69 +406,79 @@ elif menu == "🗂️ 상담 주제별 통계":
             (clean_str(row['주호소1']), clean_str(row['하위요소1'])), None
         )
 
-# --- 집계 함수 정의 ---
-def make_topic_stats_with_area(df, main_col, sub_col, header_text):
-    st.markdown(f"#### {header_text}")
+    df_counseling['영역'] = df_counseling.apply(map_region, axis=1)
+
     count_df = (
-        df.groupby(['영역', main_col, sub_col])
+        df_counseling
+        .groupby(['영역', '주호소1', '하위요소1'])
         .size().reset_index(name='상담건수')
-        .sort_values(['영역', main_col, sub_col])
+        .sort_values(['영역', '주호소1', '하위요소1'])
         .reset_index(drop=True)
     )
+    st.header("상담 주제별 통계")
+    st.markdown("1) 개요")
     st.dataframe(count_df)
-    # 결측치 안내
-    missing_main = df[main_col].isnull().sum()
-    missing_sub = df[sub_col].isnull().sum()
-    if missing_main > 0 or missing_sub > 0:
-        st.warning(f"'{main_col}' 또는 '{sub_col}' 열에 결측치가 있습니다. 분석에서 누락될 수 있습니다.")
-        with st.expander(f"{main_col} 또는 {sub_col} 결측치 행 보기"):
-            st.dataframe(df[df[main_col].isnull() | df[sub_col].isnull()][['사례번호', '아이디', '상담실시일', '영역', main_col, sub_col]])
 
-def make_area_sum_table(df, area_col, main_col, sub_col, label=""):
-    temp = df.dropna(subset=[main_col, sub_col])
-    area_sum = (
-        temp.groupby(area_col).size().reset_index(name='영역별 상담건수 합계')
-        .sort_values('영역별 상담건수 합계', ascending=False)
+    not_mapped = df_counseling[df_counseling['영역'].isnull()]
+    not_mapped = not_mapped[~(not_mapped['주호소1'].isnull() & not_mapped['하위요소1'].isnull())]
+    st.write(f"매핑이 안 된 상담(미분류) 건수: {len(not_mapped)}")
+    if len(not_mapped) > 0:
+        st.write("미분류 건(주호소1, 하위요소1) 목록 (중복제거):")
+        st.dataframe(not_mapped[['주호소1', '하위요소1']].drop_duplicates())
+
+    area_sum_df = (
+        count_df.groupby('영역')['상담건수'].sum().reset_index()
+        .sort_values('상담건수', ascending=False)
     )
+    area_sum_df.columns = ['영역', '영역별 상담건수 합계']
     total_row = pd.DataFrame({
-        area_col: ['합계'],
-        '영역별 상담건수 합계': [area_sum['영역별 상담건수 합계'].sum()]
+        '영역': ['합계'],
+        '영역별 상담건수 합계': [area_sum_df['영역별 상담건수 합계'].sum()]
     })
-    area_sum_with_total = pd.concat([area_sum, total_row], ignore_index=True)
-    st.markdown(f"#### {label} 영역별 상담건수 합계")
-    st.dataframe(area_sum_with_total)
+    area_sum_df_with_total = pd.concat([area_sum_df, total_row], ignore_index=True)
+    st.markdown("2) 영역별 상담건수 합계")
+    st.dataframe(area_sum_df_with_total)
 
-def make_main_issue_sum_table(df, area_col, main_col, label=""):
-    # 영역별 주호소별 상담건수 합계
-    count_df = (
-        df
-        .dropna(subset=[area_col, main_col])
-        .groupby([area_col, main_col])
-        .size()
-        .reset_index(name=f"{main_col}별 상담건수 합계")
-        .sort_values([area_col, f"{main_col}별 상담건수 합계"], ascending=[True, False])
-        .reset_index(drop=True)
+    main_issue_sum_df = (
+    count_df
+    .groupby(['영역','주호소1'])['상담건수'].sum()
+    .reset_index()
+    .sort_values('상담건수', ascending=False)
     )
+    main_issue_sum_df.columns = ['영역', '주호소1', '주호소1별 상담건수 합계']
+
     # 합계 행 추가
-    total_row = pd.DataFrame({
-        area_col: ['합계'],
-        main_col: [''],
-        f"{main_col}별 상담건수 합계": [count_df[f"{main_col}별 상담건수 합계"].sum()]
-    })
-    count_df_with_total = pd.concat([count_df, total_row], ignore_index=True)
-    st.markdown(f"#### {label} {main_col}별 상담건수 합계")
-    st.dataframe(count_df_with_total)
+    total_row = pd.DataFrame([{
+        '영역': '합계',
+        '주호소1': '',
+        '주호소1별 상담건수 합계': main_issue_sum_df['주호소1별 상담건수 합계'].sum()
+    }])
+    main_issue_sum_df_with_total = pd.concat([main_issue_sum_df, total_row], ignore_index=True)
 
+    st.markdown("3) 주호소1별 상담건수 합계")
+    st.dataframe(main_issue_sum_df_with_total)
 
-# --- 실제 집계 표 출력 ---
-if menu == "🗂️ 상담 주제별 통계":
-    st.header("상담 주제별 통계 (영역 포함)")
-    make_topic_stats_with_area(df_counseling, '주호소1', '하위요소1', "1) 영역 · 주호소1 · 하위요소1")
-    make_area_sum_table(df_counseling, '영역1', '주호소1', '하위요소1', label="주호소1")
-    make_main_issue_sum_table(df_counseling, '영역1', '주호소1')
-    make_topic_stats_with_area(df_counseling, '주호소2', '하위요소2', "2) 영역 · 주호소2 · 하위요소2")
-    make_area_sum_table(df_counseling, '영역2', '주호소2', '하위요소2', label="주호소2")
-    make_main_issue_sum_table(df_counseling, '영역2', '주호소2')
-    make_topic_stats_with_area(df_counseling, '주호소3', '하위요소3', "3) 영역 · 주호소3 · 하위요소3")
-    make_area_sum_table(df_counseling, '영역3', '주호소3', '하위요소3', label="주호소3")
-    make_main_issue_sum_table(df_counseling, '영역3', '주호소3')
+    missing_count = df_counseling['주호소1'].isnull().sum()
+    if missing_count > 0:
+        st.warning(f"'주호소1' 열에 결측치가 {missing_count}건 있습니다. 해당 행은 분석에서 누락될 수 있습니다.")
+        with st.expander("'주호소1' 결측치가 있는 상담 내역 보기"):
+            st.dataframe(df_counseling[df_counseling['주호소1'].isnull()][['사례번호', '아이디', '상담실시일', '주호소1', '하위요소1']])
+    else:
+        st.info("'주호소1' 열에 결측치는 없습니다.")
+
+    st.markdown("---")
+    st.header("내담자별 전체 상담 이용 횟수")
+    client_counts = df_counseling.groupby('아이디')['사례번호'].count().reset_index()
+    client_counts.columns = ['아이디', '상담횟수']
+    client_counts['아이디'] = client_counts['아이디'].apply(lambda x: str(int(float(x))) if pd.notnull(x) and str(x).replace('.', '', 1).isdigit() else str(x))
+    client_counts.index = client_counts.index + 1
+    client_counts.reset_index(inplace=True)
+    client_counts.rename(columns={'index': 'No'}, inplace=True)
+
+    total_row = pd.DataFrame([{
+        'No': '합계',
+        '아이디': f"총 {client_counts['아이디'].nunique()}명",
+        '상담횟수': client_counts['상담횟수'].sum()
+    }])
+    client_counts_with_total = pd.concat([client_counts, total_row], ignore_index=True)
+    st.dataframe(client_counts_with_total, use_container_width=True)
