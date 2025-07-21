@@ -590,38 +590,68 @@ elif menu == "📈 상담 통계":
     st.markdown("---")
     st.subheader("6) 직급별 인원 및 횟수")
  
-    # 1. 직급 공란/NaN을 '미상'으로 통일
+    # 1. 아이디 정제 (공백, 특수문자, 데이터타입 통일)
+    df_counseling['아이디_정제'] = (
+        df_counseling['아이디']
+        .astype(str)
+        .str.replace(r'\s+', '', regex=True)   # 모든 공백 제거
+        .str.replace('\u3000', '')             # 전각 공백도 제거
+        .str.strip()
+    )
+
+    # 2. 직급 공란/NaN을 '미상'으로 통일
     df_counseling['신청직원직무_정리'] = df_counseling['신청직원직무'].fillna('미상').replace('', '미상')
 
-    # 2. 월별 직급별 중복 없는 인원수
+    # 상담연월 NaT/결측/빈값 제거
+    df_counseling = df_counseling[
+        df_counseling['상담연월'].notna() &
+        (df_counseling['상담연월'].astype(str) != 'NaT') &
+        (df_counseling['상담연월'].astype(str) != 'nan') &
+        (df_counseling['상담연월'].astype(str) != '')
+    ]
+
+    # 3. 월별 직급별 중복 없는 인원수
     duty_people = (
         df_counseling
-        .dropna(subset=['상담연월', '아이디'])
-        .groupby(['상담연월', '신청직원직무_정리'])['아이디']
+        .dropna(subset=['상담연월', '아이디_정제'])
+        .groupby(['상담연월', '신청직원직무_정리'])['아이디_정제']
         .nunique()
         .reset_index()
     )
-    duty_people_summary = duty_people.pivot(index='상담연월', columns='신청직원직무_정리', values='아이디')
+    duty_people = duty_people[duty_people['상담연월'].notna()]
+
+    duty_people_summary = duty_people.pivot(index='상담연월', columns='신청직원직무_정리', values='아이디_정제')
     duty_people_summary = duty_people_summary.fillna(0).astype(int)
     duty_people_summary['합계'] = duty_people_summary.sum(axis=1)
     duty_people_summary.loc['누계'] = duty_people_summary.sum()
 
-    # 3. 실계(중복제거 전체 인원) 행 추가
-    real_by_duty = (
+    # 4. 실계(아이디별 대표 직급: '미상'이 아닌 값이 있으면 그걸로)
+    def get_representative_job(jobs):
+        for job in jobs:
+            if job != '미상':
+                return job
+        return '미상'
+
+    id_job = (
         df_counseling
-        .assign(아이디=lambda x: x['아이디'].astype(str).str.strip())
-        .drop_duplicates(['신청직원직무_정리', '아이디'])
-        .groupby('신청직원직무_정리')['아이디']
-        .nunique()
+        .groupby('아이디_정제')['신청직원직무_정리']
+        .apply(lambda jobs: get_representative_job(jobs))
+        .reset_index()
     )
-    real_duty_total = df_counseling['아이디'].astype(str).str.strip().dropna().drop_duplicates().shape[0]
-    row_dict = {col: int(real_by_duty[col]) if col in real_by_duty and pd.notnull(real_by_duty[col]) else 0 for col in duty_people_summary.columns if col != '합계'}
+
+    real_by_duty = id_job.groupby('신청직원직무_정리')['아이디_정제'].nunique()
+    real_duty_total = id_job['아이디_정제'].nunique()
+
+    # 5. 실계 행 만들기
+    row_dict = {col: int(real_by_duty[col]) if col in real_by_duty and pd.notnull(real_by_duty[col]) else 0
+                for col in duty_people_summary.columns if col != '합계'}
     row_dict['합계'] = real_duty_total
-    # 누계 아래 실계 추가
     duty_people_summary.loc['실계'] = pd.Series(row_dict)
 
+    # 6. 결과 출력
     st.markdown("직급별 이용 인원")
     st.dataframe(duty_people_summary)
+    
 
     # --- 직급별 이용 횟수 (회) ---
     st.markdown("직급별 이용 횟수 (회)")

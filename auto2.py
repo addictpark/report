@@ -4,21 +4,27 @@ from pptx.util import Pt
 from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 
 # 파일명 및 시트/테이블명 매핑
-excel_file = 'autotest.xlsx'
-ppt_file = '자동화.pptx'
+excel_file = 'autotest-2.xlsx'
+ppt_file = '자동화2.pptx'
 output_file = 'output_report.pptx'
 
 sheet_to_table = {
     # 이용 인원
     '서비스 이용 인원': 'service1',
-    '상담유형별 이용 인원': 'type_people',
+    '상담방법별 이용 인원': 'type_people',
+    '상담유형별 이용 인원': 'subject_people',
     '성별 이용 인원': 'sex_people',
     '연령별 이용 인원': 'age_people',
+    '소속별 이용 인원': 'group_people',
+    '직급별 이용 인원': 'class_people',
     # 이용 횟수
     '서비스 이용 횟수': 'service2',
-    '상담유형별 이용 횟수': 'type_case',
+    '상담방법별 이용 횟수': 'type_case',
+    '상담유형별 이용 횟수': 'subject_case',
     '성별 이용 횟수': 'sex_case',
     '연령별 이용 횟수': 'age_case',
+    '소속별 이용 횟수': 'group_case',
+    '직급별 이용 횟수': 'class_case',
     '심리진단 이용 횟수': 'diag_case',
 }
 

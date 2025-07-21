@@ -19,7 +19,6 @@ sheet_to_table = {
     '상담유형별 이용 횟수': 'type_case',
     '성별 이용 횟수': 'sex_case',
     '연령별 이용 횟수': 'age_case',
-    '심리진단 이용 횟수': 'diag_case',
 }
 
 # 데이터프레임 읽기
@@ -33,19 +32,8 @@ MIN_TABLE_ROWS = 2
 def format_value(val):
     if pd.isnull(val):
         return '-'
-    # 0, 0.0, '0' 모두 '-'로 변환
-    try:
-        if float(val) == 0:
-            return '-'
-    except Exception:
-        pass
-    # 소수점이 없는 값은 정수로 표시
-    if isinstance(val, float):
-        if val.is_integer():
-            return str(int(val))
-        else:
-            # 소수점이 있으면 반올림 없이 그대로 출력 (원하면 format(val, '.1f') 등 조정)
-            return str(val)
+    if isinstance(val, float) and val.is_integer():
+        return str(int(val))
     return str(val)
 
 # ---- 이용 인원 표: 누계, 실계 ----
