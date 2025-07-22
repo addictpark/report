@@ -117,7 +117,7 @@ if uploaded_excel and uploaded_ppt:
     st.success("✅ 보고서 생성이 완료되었습니다!")
 
     st.download_button(
-        label="📥 자동화 보고서 다운로드",
+        label="📥 보고서 다운로드",
         data=output.getvalue(),
         file_name="output_report.pptx",
         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
