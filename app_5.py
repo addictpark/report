@@ -677,8 +677,6 @@ elif menu == "📈 상담 통계":
 
     st.markdown("---")
     st.subheader("7) 상담회기별 인원 및 횟수")
-
-    st.markdown("---")
     st.markdown("상담회기별 이용 인원 (명)")
 
     # 월별-아이디별 해당 달에 상담받은 총 횟수(행의 갯수)
