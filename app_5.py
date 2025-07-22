@@ -358,25 +358,34 @@ elif menu == "📈 상담 통계":
     type_counts_summary = type_counts_summary.reindex(all_months).fillna(0).astype(int)
     type_counts_summary['합계'] = type_counts_summary.sum(axis=1)
     type_counts_summary.loc['누계'] = type_counts_summary.sum()
+    df_counseling.columns = df_counseling.columns.str.strip().str.lower()
 
-df_counseling.columns = df_counseling.columns.str.strip().str.lower()
+    # 2. type_counts_summary 만들기 (index=상담연월, columns=상담유형)
+    type_counts = df_counseling.groupby(['상담연월', '상담유형'])['사례번호'].count().reset_index()
+    type_counts_summary = type_counts.pivot(index='상담연월', columns='상담유형', values='사례번호')
+    type_counts_summary = type_counts_summary.reindex(all_months).fillna(0).astype(int)
+    type_counts_summary['합계'] = type_counts_summary.sum(axis=1)
+    type_counts_summary.loc['누계'] = type_counts_summary.sum()
 
-# No-show 컬럼명 소문자 통일해서 찾기
-no_show_col = [col for col in df_counseling.columns if 'no-show' in col][0] if any('no-show' in col for col in df_counseling.columns) else None
-
-if no_show_col:
-    no_show_y = (
-        df_counseling[df_counseling[no_show_col].astype(str).str.upper() == 'Y']
+    # 3. No-show 컬럼 추가
+    no_show_col = next((col for col in df_counseling.columns if 'no-show' in col), None)
+    if no_show_col:
+        # print(no_show_col, df_counseling[no_show_col].unique())  # ← 실제 값 점검용
+        no_show_y = (
+            df_counseling[df_counseling[no_show_col].astype(str).str.upper() == 'Y']
             .groupby('상담연월')
             .size()
             .reindex(all_months).fillna(0).astype(int)
-    )
-    type_counts_summary['No-show(Y)'] = no_show_y
-    type_counts_summary.loc['누계', 'No-show(Y)'] = no_show_y.sum()
-else:
-    type_counts_summary['No-show(Y)'] = 0
-    type_counts_summary.loc['누계', 'No-show(Y)'] = 0
+        )
+        type_counts_summary['No-show(Y)'] = no_show_y
+        type_counts_summary.loc['누계', 'No-show(Y)'] = no_show_y.sum()
+    else:
+        type_counts_summary['No-show(Y)'] = 0
+        type_counts_summary.loc['누계', 'No-show(Y)'] = 0
 
+    # 4. 표 출력 (꼭 if문 밖에서)
+    st.markdown("상담유형별 이용 횟수")
+    st.dataframe(type_counts_summary)
 
     st.markdown("상담유형별 이용 횟수")
     st.dataframe(type_counts_summary)
