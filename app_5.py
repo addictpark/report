@@ -383,10 +383,12 @@ elif menu == "📈 상담 통계":
         type_counts_summary['No-show(Y)'] = 0
         type_counts_summary.loc['누계', 'No-show(Y)'] = 0
 
-        st.warning(f"노쇼 값이 있습니다. 노쇼를 별도 유형으로 다루시는 경우에는 원 데이터를 다시 확인하시기 바랍니다.")
-
     st.markdown("상담유형별 이용 횟수")
     st.dataframe(type_counts_summary)
+
+    # 5. 노쇼 경고문
+    if no_show_col and no_show_y.sum() > 0:
+        st.warning("노쇼 값이 있습니다. 노쇼를 별도로 다루시는 경우에는 원 데이터를 다시 확인하시기 바랍니다.")
 
     # --- 신청유형별 인원 및 횟수 ---
     st.markdown("---")
