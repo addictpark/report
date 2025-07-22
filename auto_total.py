@@ -6,30 +6,49 @@ from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 import io
 
 # Streamlit UI
-st.title("📊 보고서 자동 생성기-한국은행 버전")
-st.markdown("PPT 템플릿과 엑셀을 업로드하면 보고서를 자동 생성합니다.")
+st.title("📊 통합형 PPT 자동 보고서 생성기")
+st.markdown("PPT 템플릿과 엑셀을 업로드하고 템플릿 유형을 선택하면 자동으로 보고서를 생성합니다.")
+
+# 템플릿 선택
+template_option = st.selectbox(
+    "🗂️ 사용할 템플릿 양식을 선택하세요:",
+    ["세아 버전", "한국은행 버전"]
+)
 
 uploaded_ppt = st.file_uploader("📁 PPT 템플릿 파일(PPTX)을 업로드하세요", type=["pptx"])
 uploaded_excel = st.file_uploader("📁 엑셀 파일(XLSX)을 업로드하세요", type=["xlsx"])
 
 # 시트와 도형 이름 매핑
-table_map = {
-    '서비스 이용 인원': 'service1',
-    '상담방법별 이용 인원': 'type_people',
-    '상담유형별 이용 인원': 'subject_people',
-    '성별 이용 인원': 'sex_people',
-    '연령별 이용 인원': 'age_people',
-    '소속별 이용 인원': 'group_people',
-    '직급별 이용 인원': 'class_people',
-    '서비스 이용 횟수': 'service2',
-    '상담방법별 이용 횟수': 'type_case',
-    '상담유형별 이용 횟수': 'subject_case',
-    '성별 이용 횟수': 'sex_case',
-    '연령별 이용 횟수': 'age_case',
-    '소속별 이용 횟수': 'group_case',
-    '직급별 이용 횟수': 'class_case',
-    '심리진단 이용 횟수': 'diag_case',
-}
+if template_option == "세아 버전":
+    table_map = {
+        '서비스 이용 인원': 'service1',
+        '상담유형별 이용 인원': 'type_people',
+        '성별 이용 인원': 'sex_people',
+        '연령별 이용 인원': 'age_people',
+        '서비스 이용 횟수': 'service2',
+        '상담유형별 이용 횟수': 'type_case',
+        '성별 이용 횟수': 'sex_case',
+        '연령별 이용 횟수': 'age_case',
+        '심리진단 이용 횟수': 'diag_case',
+    }
+elif template_option == "한국은행 버전":
+    table_map = {
+        '서비스 이용 인원': 'service1',
+        '상담방법별 이용 인원': 'type_people',
+        '상담유형별 이용 인원': 'subject_people',
+        '성별 이용 인원': 'sex_people',
+        '연령별 이용 인원': 'age_people',
+        '소속별 이용 인원': 'group_people',
+        '직급별 이용 인원': 'class_people',
+        '서비스 이용 횟수': 'service2',
+        '상담방법별 이용 횟수': 'type_case',
+        '상담유형별 이용 횟수': 'subject_case',
+        '성별 이용 횟수': 'sex_case',
+        '연령별 이용 횟수': 'age_case',
+        '소속별 이용 횟수': 'group_case',
+        '직급별 이용 횟수': 'class_case',
+        '심리진단 이용 횟수': 'diag_case',
+    }
 
 font_name = '나눔스퀘어_ac'
 font_size = Pt(10)

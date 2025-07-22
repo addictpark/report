@@ -11,11 +11,11 @@ font_size = Pt(10)
 MIN_TABLE_ROWS = 2
 
 # 파일 업로드
-st.title("📊 보고서 자동 생성기")
-st.markdown("업로드한 엑셀 및 PPT 템플릿을 기반으로 자동화된 보고서를 생성합니다.")
+st.title("📊 보고서 자동 생성기-세아 버전")
+st.markdown("PPT 템플릿과 엑셀을 업로드하면 보고서를 자동 생성합니다.")
 
-uploaded_ppt = st.file_uploader("📁 PPT 템플릿 파일을 업로드하세요", type=["pptx"])
-uploaded_excel = st.file_uploader("📁 엑셀 파일을 업로드하세요", type=["xlsx"])
+uploaded_ppt = st.file_uploader("📁 PPT 템플릿 파일(PPTX)을 업로드하세요", type=["pptx"])
+uploaded_excel = st.file_uploader("📁 엑셀 파일(XLSX)을 업로드하세요", type=["xlsx"])
 
 # 시트-도형명 매핑
 sheet_to_table = {
