@@ -6,7 +6,7 @@ from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 import io
 
 # Streamlit UI
-st.title("📊 통합형 PPT 자동 보고서 생성기")
+st.title("📊 보고서 자동 생성기")
 st.markdown("PPT 템플릿과 엑셀을 업로드하고 템플릿 유형을 선택하면 자동으로 보고서를 생성합니다.")
 
 # 템플릿 선택
