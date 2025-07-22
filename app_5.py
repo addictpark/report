@@ -383,10 +383,6 @@ elif menu == "📈 상담 통계":
         type_counts_summary['No-show(Y)'] = 0
         type_counts_summary.loc['누계', 'No-show(Y)'] = 0
 
-    # 4. 표 출력 (꼭 if문 밖에서)
-    st.markdown("상담유형별 이용 횟수")
-    st.dataframe(type_counts_summary)
-
     st.markdown("상담유형별 이용 횟수")
     st.dataframe(type_counts_summary)
 
