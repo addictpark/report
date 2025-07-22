@@ -6,11 +6,11 @@ from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 import io
 
 # Streamlit UI
-st.title("📊 PPT 자동 보고서 생성기")
+st.title("📊 보고서 자동 생성기")
 st.markdown("엑셀 파일과 PPT 템플릿을 업로드하면 자동 보고서를 생성합니다.")
 
-uploaded_excel = st.file_uploader("📁 엑셀 파일을 업로드하세요", type=["xlsx"])
 uploaded_ppt = st.file_uploader("📁 PPT 템플릿 파일을 업로드하세요", type=["pptx"])
+uploaded_excel = st.file_uploader("📁 엑셀 파일을 업로드하세요", type=["xlsx"])
 
 # 시트와 도형 이름 매핑
 table_map = {
