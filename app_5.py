@@ -685,7 +685,7 @@ elif menu == "📈 상담 통계":
         .dropna(subset=['상담연월', '아이디'])
         .groupby(['상담연월', '아이디'])
         .size()
-        .reset_index(name='회기')
+        .reset_index(name='회기수')
     )
 
     # 회기수 전체 범위 산출 (예: 1~N)
@@ -696,7 +696,7 @@ elif menu == "📈 상담 통계":
     # 각 회기수(1회, 2회, ...)별 인원 집계
     session_people_table = (
         session_by_user_month
-        .groupby(['회기', '상담연월'])['아이디']
+        .groupby(['회기수', '상담연월'])['아이디']
         .nunique()
         .unstack(fill_value=0)
         .reindex(all_sessions, fill_value=0)   # <-- 0인 회기수도 포함
