@@ -359,20 +359,24 @@ elif menu == "📈 상담 통계":
     type_counts_summary['합계'] = type_counts_summary.sum(axis=1)
     type_counts_summary.loc['누계'] = type_counts_summary.sum()
 
-    if 'No-show' in df_counseling.columns:
-        no_show_y = (
-            df_counseling[df_counseling['No-show'].astype(str).str.upper() == 'Y']
+df_counseling.columns = df_counseling.columns.str.strip().str.lower()
+
+# No-show 컬럼명 소문자 통일해서 찾기
+no_show_col = [col for col in df_counseling.columns if 'no-show' in col][0] if any('no-show' in col for col in df_counseling.columns) else None
+
+if no_show_col:
+    no_show_y = (
+        df_counseling[df_counseling[no_show_col].astype(str).str.upper() == 'Y']
             .groupby('상담연월')
             .size()
             .reindex(all_months).fillna(0).astype(int)
-        )
-        # 표 오른쪽에 'No-show(Y)' 열 추가
-        type_counts_summary['No-show(Y)'] = no_show_y
-        # 마지막 행(누계)에는 알림(예: "확인") 또는 총합 등 표기 (원하시는 스타일로)
-        type_counts_summary.loc['누계', 'No-show(Y)'] = no_show_y.sum()
-    else:
-        type_counts_summary['No-show(Y)'] = 0
-        type_counts_summary.loc['누계', 'No-show(Y)'] = 0
+    )
+    type_counts_summary['No-show(Y)'] = no_show_y
+    type_counts_summary.loc['누계', 'No-show(Y)'] = no_show_y.sum()
+else:
+    type_counts_summary['No-show(Y)'] = 0
+    type_counts_summary.loc['누계', 'No-show(Y)'] = 0
+
 
     st.markdown("상담유형별 이용 횟수")
     st.dataframe(type_counts_summary)
