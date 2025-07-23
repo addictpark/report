@@ -783,7 +783,7 @@ elif menu == "📈 상담 통계":
     session_count_table['합계'] = session_count_table.sum(axis=1)
     session_count_table.loc['합계'] = session_count_table.sum(axis=0)
 
-    st.markdown("상담회기별 실제 이용 건수 (월별, 중복 없이)")
+    st.markdown("상담회기별 실제 이용 건수")
     st.dataframe(session_count_table)
 
 
