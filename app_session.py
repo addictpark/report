@@ -707,56 +707,38 @@ elif menu == "📈 상담 통계":
     st.subheader("7) 상담회기별 인원 및 횟수")
     st.markdown("상담회기별 이용 인원 (명)")
 
-    session_by_user_month = (
+    # 1. 상담일 오름차순 정렬 및 누적회기 부여
+    df_counseling = df_counseling.sort_values(['아이디', '상담실시일'])
+    df_counseling['누적회기'] = df_counseling.groupby('아이디').cumcount() + 1
+
+    # 2. 각 월별, 내담자별 "가장 마지막 상담"만 추출
+    last_session_per_user_month = (
         df_counseling
-        .dropna(subset=['상담연월', '아이디'])
-        .groupby(['상담연월', '아이디'])
-        .size()
-        .reset_index(name='회기수')
+            .groupby(['상담연월', '아이디'])
+            .tail(1)
+            .reset_index(drop=True)
     )
 
-    months = sorted(session_by_user_month['상담연월'].unique())
-    result = {}
-    for m in months:
-        sub = session_by_user_month[session_by_user_month['상담연월'] <= m]
-        id_cum = sub.groupby('아이디')['회기수'].sum()
-        result[m] = id_cum
+    # 3. 월별로 누적회기별 “최종 달성 인원” 카운트
+    table = pd.pivot_table(
+        last_session_per_user_month,
+        index='누적회기',
+        columns='상담연월',
+        values='아이디',
+        aggfunc='nunique',
+        fill_value=0
+    )
 
-    # all_sessions: 전체 회기수(1,2,...)
-    all_sessions = set()
-    for ser in result.values():
-        all_sessions.update(ser.values)
-    all_sessions = sorted([int(x) for x in all_sessions if pd.notnull(x)])
+    # ✅ 4. 누적회기별 "전 기간 최종 도달 인원" 계산 (합계 열 대체)
+    # 각 아이디별 전체 기간 중 마지막 누적회기 구하기
+    last_session = df_counseling.groupby('아이디')['누적회기'].max()
+    real_count_by_session = last_session.value_counts().sort_index()
 
-    # 월별 표 만들기
-    table = pd.DataFrame(index=all_sessions, columns=months)
-    for m in months:
-        id_cum = result[m]
-        for n in all_sessions:
-            prev = result[months[months.index(m)-1]] if months.index(m) > 0 else pd.Series([], dtype=int)
-            ids_n = set(id_cum[id_cum == n].index)
-            if months.index(m) > 0:
-                ids_prev = set(prev[prev >= n].index)
-                ids_n = ids_n - ids_prev
-            table.loc[n, m] = len(ids_n)
+    # table에 합계열 추가 (index는 누적회기 값과 동일해야 함)
+    table['합계'] = [real_count_by_session.get(n, 0) for n in table.index]
 
-    # 합계 행(맨 아래)
-    table.loc['합계', months] = [
-        session_by_user_month[session_by_user_month['상담연월'] == m]['아이디'].nunique() for m in months
-    ]
-
-    # 합계 열(맨 오른쪽): 전체 기간 누적 회기수별 최종 인원수
-    # ① 먼저 각 아이디가 전체 기간 동안 받은 총 회기수 집계
-    user_total_sessions = session_by_user_month.groupby('아이디')['회기수'].sum()
-
-    # ② 각 회기수(n)별로 마지막이 n회기인 고유 인원수를 셈
-    table['합계'] = [(user_total_sessions == n).sum() for n in all_sessions] + [user_total_sessions.shape[0]]
-
-    # ③ 맨 아래 '합계' 셀에는 전체 고유 인원수
-    table.loc['합계', '합계'] = user_total_sessions.shape[0]
-
-    # (마지막 마무리: NaN → 0)
-    table = table.fillna(0).astype(int)
+    # 5. 각 월별 전체 인원수 (합계 행)
+    table.loc['합계'] = list(table.iloc[:, :-1].sum(axis=0)) + [last_session.shape[0]]
 
     st.dataframe(table)
 
