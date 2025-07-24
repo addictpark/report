@@ -6,20 +6,20 @@ from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 import io
 
 # Streamlit UI
-st.title("📊 보고서 자동 생성기")
+st.title("📊 보고서 반자동화 프로그램")
 st.markdown("PPT 템플릿과 엑셀을 업로드하고 템플릿 유형을 선택하면 자동으로 보고서를 생성합니다.")
 
 # 템플릿 선택
 template_option = st.selectbox(
-    "🗂️ 사용할 템플릿 양식을 선택하세요:",
-    ["세아 버전", "국방기술 버전", "한국은행 버전"]
+    "🗂️ 고객사를 선택하세요:",
+    ["세아", "국방기술", "한국은행"]
 )
 
 uploaded_ppt = st.file_uploader("📁 PPT 템플릿 파일(PPTX)을 업로드하세요", type=["pptx"])
 uploaded_excel = st.file_uploader("📁 엑셀 파일(XLSX)을 업로드하세요", type=["xlsx"])
 
 # 시트와 도형 이름 매핑
-if template_option == "세아 버전":
+if template_option == "세아":
     table_map = {
         '서비스 이용 인원': 'service1',
         '상담유형별 이용 인원': 'type_people',
@@ -31,7 +31,7 @@ if template_option == "세아 버전":
         '연령별 이용 횟수': 'age_case',
         '심리진단 이용 횟수': 'diag_case',
     }
-elif template_option == "국방기술 버전":
+elif template_option == "국방기술":
     table_map = {
         '서비스 이용 인원': 'service1',
         '상담방법별 이용 인원': 'type_people',
@@ -50,7 +50,7 @@ elif template_option == "국방기술 버전":
         '심리진단 이용 횟수': 'diag_case',
     }
 
-elif template_option == "한국은행 버전":
+elif template_option == "한국은행":
     table_map = {
         '서비스 이용 인원': 'summary_people',
         '상담방법별 이용 인원': 'issue_people',
